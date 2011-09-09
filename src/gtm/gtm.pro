@@ -1,7 +1,7 @@
 include( $$(QMKBLD)/root.pri )
 QT -= gui
 TEMPLATE = lib
-CONFIG += dynamic
+CONFIG += static
 TARGET = gtm
 DESTDIR = $$PRJ_LIB
 DEPENDPATH += .
