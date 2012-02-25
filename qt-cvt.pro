@@ -6,4 +6,4 @@ include( $$(QMKBLD)/root.pri )
 
 
 TEMPLATE = subdirs
-SUBDIRS = src
+SUBDIRS = src test
