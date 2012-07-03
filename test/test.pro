@@ -1,19 +1,8 @@
 include( $$(QMKBLD)/root.pri )
 
-QT -= gui
-TEMPLATE = app
-CONFIG += qtestlib
-TARGET = cvt_test
-DESTDIR = $$PRJ_BIN
-DEPENDPATH += . ../src/gtm
-INCLUDEPATH += . ../inc
-LIBS += -L$$PRJ_LIB -lgtm
 
-# Use cvt runner, integrated with Qt qtestlib
-LIBS += -lcvt
-# Use gtest/gmock runner
-#LIBS += -lgtm_runner
+TEMPLATE = subdirs
+CONFIG += ordered
 
-# Input
-HEADERS += sample1.h
-SOURCES += sample1.cc sample1_unittest.cc
+SUBDIRS = cvt modeltest
+
