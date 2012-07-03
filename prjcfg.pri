@@ -52,6 +52,9 @@ isQmkDebug() {
 	message(PRJ_CONFIG = $$PRJ_CONFIG)
 }
 
+# Project wide include directory
+PRJ_INC=$(PRJ_ROOT)/inc
+
 # Now transfer project configuration tokens into CONFIG
 CONFIG *= $$PRJ_CONFIG
 
