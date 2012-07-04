@@ -10,5 +10,5 @@ INCLUDEPATH += . ../../inc
 LIBS += -L$$PRJ_LIB -lgtm
 
 # Input
-HEADERS += TestRunner.hh
+HEADERS += $$PRJ_INC/TestRunner.hh
 SOURCES += TestRunner.cc
