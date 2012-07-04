@@ -24,7 +24,7 @@ void TestRunner::tests()
 // We don't use following macro to fine tune the runner
 //QTEST_MAIN(TestRunner) 
 
-int main(int argc, char* argv[])
+int CVT_main(int argc, char* argv[])
 {
   // Since Google Mock depends on Google Test, InitGoogleMock() is
   // also responsible for initializing Google Test.  Therefore there's
@@ -53,6 +53,7 @@ int main(int argc, char* argv[])
     dest_args->push_back(s);
   }
 
+  qDebug() << "Using CVT Test runner";
   // qDebug() << args.join(",");
   // qDebug() << "qt" << qt_args.join(",");
   // qDebug() << "tr" << tr_args.join(",");
@@ -62,4 +63,10 @@ int main(int argc, char* argv[])
 
   rv = QTest::qExec(&tr, qt_args);
   return rv;
+}
+
+
+int main(int argc, char* argv[])
+{
+  return CVT_main(argc, argv);
 }
