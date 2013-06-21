@@ -56,7 +56,7 @@ isQmkDebug() {
 PRJ_INC=$(PRJ_ROOT)/inc
 
 # Now transfer project configuration tokens into CONFIG
-CONFIG *= $$PRJ_CONFIG
+CONFIG += $$PRJ_CONFIG
 
 
 

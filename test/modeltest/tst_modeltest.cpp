@@ -1,38 +1,38 @@
 /****************************************************************************
 **
-** Copyright (C) 2011 Nokia Corporation and/or its subsidiary(-ies).
-** All rights reserved.
-** Contact: Nokia Corporation (qt-info@nokia.com)
+** Copyright (C) 2013 Digia Plc and/or its subsidiary(-ies).
+** Contact: http://www.qt-project.org/legal
 **
 ** This file is part of the test suite of the Qt Toolkit.
 **
 ** $QT_BEGIN_LICENSE:LGPL$
-** GNU Lesser General Public License Usage
-** This file may be used under the terms of the GNU Lesser General Public
-** License version 2.1 as published by the Free Software Foundation and
-** appearing in the file LICENSE.LGPL included in the packaging of this
-** file. Please review the following information to ensure the GNU Lesser
-** General Public License version 2.1 requirements will be met:
-** http://www.gnu.org/licenses/old-licenses/lgpl-2.1.html.
+** Commercial License Usage
+** Licensees holding valid commercial Qt licenses may use this file in
+** accordance with the commercial license agreement provided with the
+** Software or, alternatively, in accordance with the terms contained in
+** a written agreement between you and Digia.  For licensing terms and
+** conditions see http://qt.digia.com/licensing.  For further information
+** use the contact form at http://qt.digia.com/contact-us.
 **
-** In addition, as a special exception, Nokia gives you certain additional
-** rights. These rights are described in the Nokia Qt LGPL Exception
+** GNU Lesser General Public License Usage
+** Alternatively, this file may be used under the terms of the GNU Lesser
+** General Public License version 2.1 as published by the Free Software
+** Foundation and appearing in the file LICENSE.LGPL included in the
+** packaging of this file.  Please review the following information to
+** ensure the GNU Lesser General Public License version 2.1 requirements
+** will be met: http://www.gnu.org/licenses/old-licenses/lgpl-2.1.html.
+**
+** In addition, as a special exception, Digia gives you certain additional
+** rights.  These rights are described in the Digia Qt LGPL Exception
 ** version 1.1, included in the file LGPL_EXCEPTION.txt in this package.
 **
 ** GNU General Public License Usage
-** Alternatively, this file may be used under the terms of the GNU General
-** Public License version 3.0 as published by the Free Software Foundation
-** and appearing in the file LICENSE.GPL included in the packaging of this
-** file. Please review the following information to ensure the GNU General
-** Public License version 3.0 requirements will be met:
-** http://www.gnu.org/copyleft/gpl.html.
-**
-** Other Usage
-** Alternatively, this file may be used in accordance with the terms and
-** conditions contained in a signed written agreement between you and Nokia.
-**
-**
-**
+** Alternatively, this file may be used under the terms of the GNU
+** General Public License version 3.0 as published by the Free Software
+** Foundation and appearing in the file LICENSE.GPL included in the
+** packaging of this file.  Please review the following information to
+** ensure the GNU General Public License version 3.0 requirements will be
+** met: http://www.gnu.org/copyleft/gpl.html.
 **
 **
 ** $QT_END_LICENSE$
@@ -42,6 +42,7 @@
 
 #include <QtTest/QtTest>
 #include <QtGui/QtGui>
+#include <QtWidgets/QtWidgets>
 
 #include "modeltest.h"
 #include "dynamictreemodel.h"
@@ -201,11 +202,13 @@ class ObservingObject : public QObject
     Q_OBJECT
 public:
     ObservingObject(AccessibleProxyModel  *proxy, QObject *parent = 0)
-    : QObject(parent),
-    m_proxy(proxy)
+    : QObject(parent)
+    , m_proxy(proxy)
+    , storePersistentFailureCount(0)
+    , checkPersistentFailureCount(0)
     {
-        connect(m_proxy, SIGNAL(layoutAboutToBeChanged()), SLOT(storePersistent()));
-        connect(m_proxy, SIGNAL(layoutChanged()), SLOT(checkPersistent()));
+        connect(m_proxy, SIGNAL(rowsAboutToBeMoved(QModelIndex,int,int,QModelIndex,int)), SLOT(storePersistent()));
+        connect(m_proxy, SIGNAL(rowsMoved(QModelIndex,int,int,QModelIndex,int)), SLOT(checkPersistent()));
     }
 
 public slots:
@@ -215,8 +218,14 @@ public slots:
         for (int row = 0; row < m_proxy->rowCount(parent); ++row) {
             QModelIndex proxyIndex = m_proxy->index(row, 0, parent);
             QModelIndex sourceIndex = m_proxy->mapToSource(proxyIndex);
-            Q_ASSERT(proxyIndex.isValid());
-            Q_ASSERT(sourceIndex.isValid());
+            if (!proxyIndex.isValid()) {
+                qWarning("%s: Invalid proxy index", Q_FUNC_INFO);
+                ++storePersistentFailureCount;
+            }
+            if (!sourceIndex.isValid()) {
+                qWarning("%s: invalid source index", Q_FUNC_INFO);
+                ++storePersistentFailureCount;
+            }
             m_persistentSourceIndexes.append(sourceIndex);
             m_persistentProxyIndexes.append(proxyIndex);
             if (m_proxy->hasChildren(proxyIndex))
@@ -226,24 +235,39 @@ public slots:
 
     void storePersistent()
     {
-      foreach(const QModelIndex &idx, m_persistentProxyIndexes)
-        Q_ASSERT(idx.isValid()); // This is called from layoutAboutToBeChanged. Persistent indexes should be valid
+        // This method is called from rowsAboutToBeMoved. Persistent indexes should be valid
+        foreach(const QModelIndex &idx, m_persistentProxyIndexes)
+            if (!idx.isValid()) {
+                qWarning("%s: persistentProxyIndexes contains invalid index", Q_FUNC_INFO);
+                ++storePersistentFailureCount;
+            }
 
-        Q_ASSERT(m_proxy->persistent().isEmpty());
+        if (!m_proxy->persistent().isEmpty()) {
+            qWarning("%s: proxy should have no persistent indexes when storePersistent called",
+                     Q_FUNC_INFO);
+            ++storePersistentFailureCount;
+        }
         storePersistent(QModelIndex());
-        Q_ASSERT(!m_proxy->persistent().isEmpty());
+        if (m_proxy->persistent().isEmpty()) {
+            qWarning("%s: proxy should have persistent index after storePersistent called",
+                     Q_FUNC_INFO);
+            ++storePersistentFailureCount;
+        }
     }
 
     void checkPersistent()
     {
         for (int row = 0; row < m_persistentProxyIndexes.size(); ++row) {
-            QModelIndex updatedProxy = m_persistentProxyIndexes.at(row);
-            QModelIndex updatedSource = m_persistentSourceIndexes.at(row);
+            m_persistentProxyIndexes.at(row);
+            m_persistentSourceIndexes.at(row);
         }
         for (int row = 0; row < m_persistentProxyIndexes.size(); ++row) {
             QModelIndex updatedProxy = m_persistentProxyIndexes.at(row);
             QModelIndex updatedSource = m_persistentSourceIndexes.at(row);
-            QCOMPARE(m_proxy->mapToSource(updatedProxy), updatedSource);
+            if (m_proxy->mapToSource(updatedProxy) != updatedSource) {
+                qWarning("%s: check failed at row %d", Q_FUNC_INFO, row);
+                ++checkPersistentFailureCount;
+            }
         }
         m_persistentSourceIndexes.clear();
         m_persistentProxyIndexes.clear();
@@ -253,6 +277,9 @@ private:
     AccessibleProxyModel  *m_proxy;
     QList<QPersistentModelIndex> m_persistentSourceIndexes;
     QList<QPersistentModelIndex> m_persistentProxyIndexes;
+public:
+    int storePersistentFailureCount;
+    int checkPersistentFailureCount;
 };
 
 void tst_ModelTest::moveSourceItems()
@@ -280,6 +307,9 @@ void tst_ModelTest::moveSourceItems()
     moveCommand->setDestAncestors(QList<int>() << 1);
     moveCommand->setDestRow(0);
     moveCommand->doCommand();
+
+    QCOMPARE(observer.storePersistentFailureCount, 0);
+    QCOMPARE(observer.checkPersistentFailureCount, 0);
 }
 
 void tst_ModelTest::testResetThroughProxy()
@@ -302,6 +332,9 @@ void tst_ModelTest::testResetThroughProxy()
     ModelResetCommand *resetCommand = new ModelResetCommand(model, this);
     resetCommand->setNumCols(0);
     resetCommand->doCommand();
+
+    QCOMPARE(observer.storePersistentFailureCount, 0);
+    QCOMPARE(observer.checkPersistentFailureCount, 0);
 }
 
 

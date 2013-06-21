@@ -1,38 +1,38 @@
 /****************************************************************************
 **
 ** Copyright (C) 2009 Stephen Kelly <steveire@gmail.com>
-** All rights reserved.
-** Contact: Nokia Corporation (qt-info@nokia.com)
+** Contact: http://www.qt-project.org/legal
 **
 ** This file is part of the test suite of the Qt Toolkit.
 **
 ** $QT_BEGIN_LICENSE:LGPL$
-** GNU Lesser General Public License Usage
-** This file may be used under the terms of the GNU Lesser General Public
-** License version 2.1 as published by the Free Software Foundation and
-** appearing in the file LICENSE.LGPL included in the packaging of this
-** file. Please review the following information to ensure the GNU Lesser
-** General Public License version 2.1 requirements will be met:
-** http://www.gnu.org/licenses/old-licenses/lgpl-2.1.html.
+** Commercial License Usage
+** Licensees holding valid commercial Qt licenses may use this file in
+** accordance with the commercial license agreement provided with the
+** Software or, alternatively, in accordance with the terms contained in
+** a written agreement between you and Digia.  For licensing terms and
+** conditions see http://qt.digia.com/licensing.  For further information
+** use the contact form at http://qt.digia.com/contact-us.
 **
-** In addition, as a special exception, Nokia gives you certain additional
-** rights. These rights are described in the Nokia Qt LGPL Exception
+** GNU Lesser General Public License Usage
+** Alternatively, this file may be used under the terms of the GNU Lesser
+** General Public License version 2.1 as published by the Free Software
+** Foundation and appearing in the file LICENSE.LGPL included in the
+** packaging of this file.  Please review the following information to
+** ensure the GNU Lesser General Public License version 2.1 requirements
+** will be met: http://www.gnu.org/licenses/old-licenses/lgpl-2.1.html.
+**
+** In addition, as a special exception, Digia gives you certain additional
+** rights.  These rights are described in the Digia Qt LGPL Exception
 ** version 1.1, included in the file LGPL_EXCEPTION.txt in this package.
 **
 ** GNU General Public License Usage
-** Alternatively, this file may be used under the terms of the GNU General
-** Public License version 3.0 as published by the Free Software Foundation
-** and appearing in the file LICENSE.GPL included in the packaging of this
-** file. Please review the following information to ensure the GNU General
-** Public License version 3.0 requirements will be met:
-** http://www.gnu.org/copyleft/gpl.html.
-**
-** Other Usage
-** Alternatively, this file may be used in accordance with the terms and
-** conditions contained in a signed written agreement between you and Nokia.
-**
-**
-**
+** Alternatively, this file may be used under the terms of the GNU
+** General Public License version 3.0 as published by the Free Software
+** Foundation and appearing in the file LICENSE.GPL included in the
+** packaging of this file.  Please review the following information to
+** ensure the GNU General Public License version 3.0 requirements will be
+** met: http://www.gnu.org/copyleft/gpl.html.
 **
 **
 ** $QT_END_LICENSE$
@@ -44,6 +44,7 @@
 #include <QtCore/QHash>
 #include <QtCore/QList>
 #include <QtCore/QTimer>
+#include <QtCore/QDebug>
 
 
 DynamicTreeModel::DynamicTreeModel(QObject *parent)
@@ -66,9 +67,11 @@ QModelIndex DynamicTreeModel::index(int row, int column, const QModelIndex &pare
   const qint64 grandParent = findParentId(parent.internalId());
   if (grandParent >= 0) {
     QList<QList<qint64> > parentTable = m_childItems.value(grandParent);
-    Q_ASSERT(parent.column() < parentTable.size());
+    if (parent.column() >= parentTable.size())
+        qFatal("%s: parent.column() must be less than parentTable.size()", Q_FUNC_INFO);
     QList<qint64> parentSiblings = parentTable.at(parent.column());
-    Q_ASSERT(parent.row() < parentSiblings.size());
+    if (parent.row() >= parentSiblings.size())
+        qFatal("%s: parent.row() must be less than parentSiblings.size()", Q_FUNC_INFO);
   }
 
   if (childIdColumns.size() == 0)
@@ -189,7 +192,8 @@ QModelIndex ModelChangeCommand::findIndex(QList<int> rows)
   while (i.hasNext())
   {
     parent = m_model->index(i.next(), col, parent);
-    Q_ASSERT(parent.isValid());
+    if (!parent.isValid())
+        qFatal("%s: parent must be valid", Q_FUNC_INFO);
   }
   return parent;
 }
@@ -303,7 +307,8 @@ bool ModelResetCommand::emitPreSignal(const QModelIndex &srcParent, int srcStart
 
 void ModelResetCommand::emitPostSignal()
 {
-    m_model->reset();
+  //FIXME; SSC
+  //m_model->reset();
 }
 
 ModelResetCommandFixed::ModelResetCommandFixed(DynamicTreeModel* model, QObject* parent)
@@ -334,3 +339,65 @@ void ModelResetCommandFixed::emitPostSignal()
     m_model->endResetModel();
 }
 
+ModelChangeChildrenLayoutsCommand::ModelChangeChildrenLayoutsCommand(DynamicTreeModel* model, QObject* parent)
+  : ModelChangeCommand(model, parent)
+{
+
+}
+
+void ModelChangeChildrenLayoutsCommand::doCommand()
+{
+    const QPersistentModelIndex parent1 = findIndex(m_rowNumbers);
+    const QPersistentModelIndex parent2 = findIndex(m_secondRowNumbers);
+
+    QList<QPersistentModelIndex> parents;
+    parents << parent1;
+    parents << parent2;
+
+    emit m_model->layoutAboutToBeChanged(parents);
+
+    int rowSize1 = -1;
+    int rowSize2 = -1;
+
+    for (int column = 0; column < m_numCols; ++column)
+    {
+        {
+          QList<qint64> &l = m_model->m_childItems[parent1.internalId()][column];
+          rowSize1 = l.size();
+          l.prepend(l.takeLast());
+        }
+        {
+          QList<qint64> &l = m_model->m_childItems[parent2.internalId()][column];
+          rowSize2 = l.size();
+          l.append(l.takeFirst());
+        }
+    }
+
+    // If we're changing one of the parent indexes, we need to ensure that we do that before
+    // changing any children of that parent. The reason is that we're keeping parent1 and parent2
+    // around as QPersistentModelIndex instances, and we query idx.parent() in the loop.
+    QModelIndexList persistent = m_model->persistentIndexList();
+    foreach (const QModelIndex &parent, parents) {
+        int idx = persistent.indexOf(parent);
+        if (idx != -1)
+            persistent.move(idx, 0);
+    }
+
+    foreach (const QModelIndex &idx, persistent) {
+        if (idx.parent() == parent1) {
+            if (idx.row() == rowSize1 - 1) {
+                m_model->changePersistentIndex(idx, m_model->createIndex(0, idx.column(), idx.internalPointer()));
+            } else {
+                m_model->changePersistentIndex(idx, m_model->createIndex(idx.row() + 1, idx.column(), idx.internalPointer()));
+            }
+        } else if (idx.parent() == parent2) {
+            if (idx.row() == 0) {
+                m_model->changePersistentIndex(idx, m_model->createIndex(rowSize2 - 1, idx.column(), idx.internalPointer()));
+            } else {
+                m_model->changePersistentIndex(idx, m_model->createIndex(idx.row() - 1, idx.column(), idx.internalPointer()));
+            }
+        }
+    }
+
+    emit m_model->layoutChanged(parents);
+}

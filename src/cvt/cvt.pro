@@ -2,7 +2,8 @@ include( $$(QMKBLD)/root.pri )
 
 QT -= gui
 TEMPLATE = lib
-CONFIG += static qtestlib
+CONFIG += static
+QT += testlib
 TARGET = cvt
 DESTDIR = $$PRJ_LIB
 DEPENDPATH += . ../gtm
