@@ -45,6 +45,10 @@ contains(QMK_COMP,Sunpro) {
 #
 win32 {
 	PRJ_CONFIG += console
+  DEFINES *= _VARIADIC_MAX=10
+  #DEFINES *= GTEST_USE_OWN_TR1_TUPLE=1
+  #DEFINES *= GTEST_HAS_TR1_TUPLE=0
+  INCLUDEPATH += $(QTDIR)/include/QtANGLE
 }
 
 
